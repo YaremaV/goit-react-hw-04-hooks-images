@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import './imagegallery.css';
 import PhotoApiServer from '../api-server/api-server';
@@ -9,54 +9,58 @@ import Error from '../Error/Error';
 import 'react-loader-spinner/dist/loader/css/react-spinner-loader.css';
 import Loader from 'react-loader-spinner';
 
+const Status = {
+  IDLE: 'idle',
+  PENDING: 'pending',
+  RESOLVED: 'resolved',
+  REJECTED: 'rejected',
+};
 const photoApiServer = new PhotoApiServer();
 
-export default class ImageGallery extends Component {
-  state = {
-    images: [],
-    error: null,
-    status: 'idle',
-  };
+export default function ImageGallery({ onClick, imageName }) {
+  const [images, setImages] = useState([]);
+  const [error, setError] = useState(null);
+  const [status, setStatus] = useState(Status.IDLE);
 
-  componentDidUpdate(prevProps, prevState) {
-    const prevName = prevProps.imageName;
-    const currentName = this.props.imageName;
+  useEffect(() => {
+    if (!imageName) return;
+    setStatus(Status.PENDING);
+    photoApiServer.resetPage();
+    photoApiServer.query = imageName;
+    updateImages();
+    return imageName;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageName]);
 
-    if (prevName !== currentName) {
-      this.setState({ status: 'pending' });
-      photoApiServer.resetPage();
-      photoApiServer.query = currentName;
-      this.updateImages(currentName);
-    }
-  }
-
-  updateImages() {
+  const updateImages = () => {
     photoApiServer
       .fetchImages()
       .then(result => {
         if (result.hits.length > 0) {
-          this.updateImagesArray(result.hits);
+          updateImagesArray(result.hits);
           photoApiServer.incrementPage();
-          this.scrollView();
+          scroll();
           return;
         }
-        throw new Error(`Sorry, but not found images ${this.props.imageName}`);
+        throw new Error(`Sorry, but not found images ${imageName}`);
       })
-      .catch(error => this.setState({ error, status: 'rejected' }));
-  }
-
-  updateImagesArray = update => {
-    if (photoApiServer.page === 1) {
-      this.setState({ images: update, status: 'resolved' });
-      return;
-    }
-    this.setState(prev => {
-      return { images: [...prev.images, ...update], status: 'resolved' };
-    });
+      .catch(error => {
+        setError(error);
+        setStatus(Status.REJECTED);
+      });
   };
 
-  scrollView = () => {
-    if (this.state.images.length > 12) {
+  const updateImagesArray = update => {
+    if (photoApiServer.page === 1) {
+      setImages(update);
+      setStatus(Status.RESOLVED);
+    }
+    setImages([...images, ...update]);
+    setStatus(Status.RESOLVED);
+  };
+
+  const scroll = () => {
+    if (images.length > 12) {
       window.scrollTo({
         top: document.documentElement.scrollHeight,
         behavior: 'smooth',
@@ -65,62 +69,55 @@ export default class ImageGallery extends Component {
     return;
   };
 
-  addImage = () => {
-    this.setState({ status: 'pending' });
-    this.updateImages('');
+  const addImage = () => {
+    updateImages('');
+    setError(Status.PENDING);
   };
 
-  // idle;
-  // pending;
-  // resolved;
-  // rejected;
+  if (status === Status.IDLE) {
+    return <InputMessage />;
+  }
 
-  render() {
-    const { images, error, status } = this.state;
+  if (status === Status.PENDING) {
+    return (
+      <Loader
+        type="ThreeDots"
+        color="#00BFFF"
+        height={300}
+        width={300}
+        timeout={3000}
+      />
+    );
+  }
 
-    if (status === 'idle') {
-      return <InputMessage />;
-    }
+  if (status === Status.REJECTED) {
+    return <Error message={error.message} />;
+  }
 
-    if (status === 'pending') {
-      return (
-        <Loader
-          type="ThreeDots"
-          color="#00BFFF"
-          height={300}
-          width={300}
-          timeout={3000}
-        />
-      );
-    }
-    if (status === 'rejected') {
-      return <Error message={error.message} />;
-    }
+  if (status === Status.RESOLVED) {
+    return (
+      <>
+        <ul className="ImageGallery" onClick={onClick}>
+          {images.map(image => {
+            return (
+              <ImageGalleryItem
+                key={image.id}
+                src={image.webformatURL}
+                bigImg={image.largeImageURL}
+                description={image.tag}
+                imageName={imageName}
+              />
+            );
+          })}
+        </ul>
 
-    if (status === 'resolved') {
-      return (
-        <>
-          <ul className="ImageGallery" onClick={this.props.onClick}>
-            {images.map(image => {
-              return (
-                <ImageGalleryItem
-                  key={image.id}
-                  src={image.webformatURL}
-                  bigImg={image.largeImageURL}
-                  description={image.tag}
-                  imageName={this.props.imageName}
-                />
-              );
-            })}
-          </ul>
-
-          <Button onClick={this.addImage} />
-        </>
-      );
-    }
+        <Button onClick={addImage} />
+      </>
+    );
   }
 }
 
 ImageGallery.propType = {
   onClick: PropTypes.func,
+  imageName: PropTypes.string,
 };
