@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './imagegallery.css';
 import PhotoApiServer from '../api-server/api-server';
@@ -22,17 +22,7 @@ export default function ImageGallery({ onClick, imageName }) {
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(Status.IDLE);
 
-  useEffect(() => {
-    if (!imageName) return;
-    setStatus(Status.PENDING);
-    photoApiServer.resetPage();
-    photoApiServer.query = imageName;
-    updateImages();
-    return imageName;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageName]);
-
-  const updateImages = () => {
+  function updateImages() {
     photoApiServer
       .fetchImages()
       .then(result => {
@@ -48,7 +38,17 @@ export default function ImageGallery({ onClick, imageName }) {
         setError(error);
         setStatus(Status.REJECTED);
       });
-  };
+  }
+
+  useEffect(() => {
+    if (!imageName) return;
+    setStatus(Status.PENDING);
+    photoApiServer.resetPage();
+    photoApiServer.query = imageName;
+    updateImages();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageName]);
 
   const updateImagesArray = update => {
     if (photoApiServer.page === 1) {
